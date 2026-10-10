@@ -96,10 +96,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          NOTES=()
           SLUG=$(node -p "require('./extension/amo-metadata.json').slug")
           REVIEW_URL=$(cat "$RUNNER_TEMP/review-url.txt")
-          # --notes goes before the generated notes.
-          NOTES=(--notes "Submitted for AMO review as a listed add-on. After approval, install it from https://addons.mozilla.org/firefox/addon/${SLUG}/ (review status for the authors: ${REVIEW_URL:-the AMO Developer Hub}).")
+          NOTES="Submitted for AMO review as a listed add-on. After approval, install it from https://addons.mozilla.org/firefox/addon/${SLUG}/ (review status for the authors: ${REVIEW_URL:-the AMO Developer Hub})."
           # gh creates the tag v<version> on this commit when it does not exist.
-          gh release create "v${VERSION}" --target "$GITHUB_SHA" --title "v${VERSION}" --generate-notes "${NOTES[@]}"
+          # --notes goes before the generated notes.
+          gh release create "v${VERSION}" --target "$GITHUB_SHA" --title "v${VERSION}" --generate-notes --notes "$NOTES"
