@@ -11,6 +11,8 @@ export interface HandoffBrowser extends ScanBrowser {
   tabs: {
     get(tabId: number): Promise<{ url?: string; status?: string; windowId?: number }>;
     update(tabId: number, change: { active: true }): Promise<unknown>;
+    /** Lets foxpass see a tab close at once, also while tabs.get still answers for it (H18). */
+    onRemoved?: { addListener(listener: (tabId: number) => void): void; removeListener(listener: (tabId: number) => void): void };
   };
   windows: { update(windowId: number, change: { focused: true }): Promise<unknown> };
   /** Needed only for the cookie signal. */
@@ -109,11 +111,32 @@ export function createHandoff(options: HandoffOptions) {
       status = final;
       return { status: final };
     };
+    let removed = false;
+    const onRemoved = (id: number) => {
+      if (id === tabId) removed = true;
+    };
+    browser.tabs.onRemoved?.addListener(onRemoved);
+    const pause = () =>
+      new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, pollMs);
+        signal?.addEventListener("abort", () => (clearTimeout(timer), resolve()), { once: true });
+      });
+    const gone = async () => removed || !(await browser.tabs.get(tabId).catch(() => undefined))?.url;
     try {
       const tab = await browser.tabs.get(tabId).catch(() => undefined);
       if (!tab?.url) return end("tab-closed");
       const start = { page: pageOf(tab.url), host: new URL(tab.url).hostname };
-      const initial = await scanTab(browser, tabId).catch(() => undefined);
+      // A failed scan is not "no wall": the tab can be closing (H18). Wait one
+      // poll, end tab-closed when the tab is gone, else scan again, 3 times at most.
+      let initial: Awaited<ReturnType<typeof scanTab>> | undefined;
+      for (let attempt = 0; attempt < 3 && !initial; attempt++) {
+        initial = await scanTab(browser, tabId).catch(() => undefined);
+        if (initial) break;
+        emit({ type: "scan-failed", tabId, at: now() });
+        await pause();
+        if (signal?.aborted) return end("cancelled");
+        if (await gone()) return end("tab-closed");
+      }
       let walls = request.walls ?? initial?.walls ?? [];
       if (walls.length === 0) return end("no-wall");
       let lastDocument = initial?.documentId;
@@ -149,13 +172,10 @@ export function createHandoff(options: HandoffOptions) {
       for (;;) {
         if (signal?.aborted) return end("cancelled");
         if (now() - began >= limit) return end("timeout");
-        await new Promise<void>((resolve) => {
-          const timer = setTimeout(resolve, pollMs);
-          signal?.addEventListener("abort", () => (clearTimeout(timer), resolve()), { once: true });
-        });
+        await pause();
         if (signal?.aborted) continue;
         const current = await browser.tabs.get(tabId).catch(() => undefined);
-        if (!current?.url) return end("tab-closed");
+        if (removed || !current?.url) return end("tab-closed");
         const host = new URL(current.url).hostname;
         if (request.cookie && browser.cookies) {
           const value = (await browser.cookies.get(request.cookie).catch(() => null))?.value ?? null;
@@ -192,6 +212,7 @@ export function createHandoff(options: HandoffOptions) {
         candidate = next;
       }
     } finally {
+      browser.tabs.onRemoved?.removeListener(onRemoved);
       waiting.delete(tabId);
       if (status !== "no-wall") await browser.scripting.executeScript({ target: { tabId }, func: clearBanner }).catch(() => undefined);
       emit({ type: "ended", tabId, at: now(), status });
