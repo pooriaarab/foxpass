@@ -1,0 +1,11 @@
+export { FoxpassError, type FoxpassErrorCode } from "./errors.js";
+export { classify } from "./classify.js";
+export { readTab, scanTab, type ScanBrowser, type TabScan } from "./scan.js";
+export { scanPage } from "./page/scan.js";
+export { OBSERVER_ID, registerWebAuthnObserver, type ObserverBrowser } from "./observer.js";
+export { observeWebAuthn } from "./page/observer.js";
+export type { ButtonInfo, FieldInfo, PageScan, PageSnapshot, Wall, WallKind, WebAuthnCall } from "./types.js";
+export { REDACTED, isSecretField, redactSnapshot, type SnapshotField } from "./redact.js";
+export { createHandoff, messageFor, type Handoff, type HandoffBrowser, type HandoffEvent, type HandoffOptions, type HandoffRequest, type HandoffResult, type Notice, type SignInSignal } from "./handoff.js";
+export { handoffTool, readPageTool, type AgentTool, type CheckResult, type TabBrowser, type ToolOutput } from "./tools.js";
+export { fillWall, type FillResult, type FillVault } from "./fill.js";
