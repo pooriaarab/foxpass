@@ -71,6 +71,8 @@ scripts/build-ext.mjs  bundles extension/ into dist-ext/ (release) or, with --e2
 src/page/         functions that run in the page; each must be self-contained
 demo/site/        the sample bank site that the demo and the E2E tests use (pnpm site)
 demo/agent.js     the demo agent: foxloop with a rule planner
+demo/core.js      the demo background logic, for both builds
+e2e/extension/    the E2E build's background with the test messages; never in dist-ext/
 e2e/run.mjs       the Firefox E2E test on dist-e2e/; writes artifacts/e2e-<date>.json
 e2e/passkey.mjs   the passkey E2E test over Marionette, with a virtual authenticator
 ```
