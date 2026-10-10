@@ -11,6 +11,7 @@ const SECRETS = [PASSWORD, EMAIL, CODE];
 
 const record = { startedAt: new Date().toISOString(), checks: [] };
 const check = (name, expected, actual) => record.checks.push({ name, expected, actual, ok: JSON.stringify(actual) === JSON.stringify(expected) });
+const kinds = (result) => result.walls.map((w) => `${w.kind}${w.selector ? ` ${w.selector}` : ""}`);
 const leaks = (value) => SECRETS.filter((s) => JSON.stringify(value).includes(s));
 
 // The demo has no host access in the release build. The E2E build adds
@@ -28,9 +29,9 @@ try {
   record.firefox = await fox.browser.version();
   const ext = await fox.openExtensionPage("popup.html");
   const send = (message) => ext.evaluate((m) => browser.runtime.sendMessage(m), message);
+  await send({ type: "ready" });
   const tabOf = (path) => poll(ext, async (url) => (await browser.tabs.query({})).find((t) => t.url?.startsWith(url))?.id, `${base}/${path}`);
   const scanOf = async (path) => send({ type: "scan", tabId: await tabOf(path) });
-  const kinds = (result) => result.walls.map((w) => `${w.kind}${w.selector ? ` ${w.selector}` : ""}`);
 
   // C1, C2, S1, S2: the scan sees the password field and never the typed text.
   const login = await fox.open(`${base}/login.html`);
