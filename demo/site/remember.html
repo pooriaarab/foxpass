@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8" /><title>Confirm - Acorn Bank</title><link rel="stylesheet" href="style.css" /></head>
+  <body>
+    <main>
+      <h1>Confirm it is you</h1>
+      <!-- The form stays after it is sent. Only a cookie shows the sign-in (failure mode H6). -->
+      <form id="verify">
+        <label for="otp">Code</label>
+        <input id="otp" name="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" />
+        <button type="submit">Verify</button>
+      </form>
+      <p id="done" hidden>Done. You can close this page.</p>
+    </main>
+    <script>
+      document.getElementById("verify").addEventListener("submit", (event) => {
+        event.preventDefault();
+        document.cookie = "acorn_device=trusted; path=/; SameSite=Lax";
+        document.getElementById("done").hidden = false;
+      });
+    </script>
+  </body>
+</html>
