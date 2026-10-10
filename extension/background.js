@@ -1,7 +1,9 @@
 // The demo background (an MV3 event page). It registers the passkey
 // observer, scans tabs for auth walls, reads tabs with secrets redacted,
 // and hands walls to the user.
-import { createHandoff, handoffTool, readTab, registerWebAuthnObserver, scanTab } from "../src/index.ts";
+import { createFoxgate } from "foxgate";
+import { FILL_TOOL, createVault } from "foxvault";
+import { createHandoff, fillWall, handoffTool, readTab, registerWebAuthnObserver, scanTab } from "../src/index.ts";
 import { runAgent } from "../demo/agent.js";
 
 const ready = registerWebAuthnObserver(browser, { js: "observer.js" });
@@ -97,6 +99,37 @@ function runFromPopup(tabId) {
   return startAgent({ id, tabId });
 }
 
+// Optional: a foxvault secret for the sample bank, filled only after the
+// user approves the exact host and field. The vault and the gate live in
+// memory, so they reset when the event page unloads.
+const fillGate = createFoxgate({ tools: { [FILL_TOOL]: "fill" } });
+const vault = createVault({ gate: fillGate.gate, browser });
+const vaultReady = (async () => {
+  await vault.initialize();
+  await vault.set("vault:acorn-password", "correct horse", { domains: ["localhost"], allowHttp: true });
+  await fillGate.host.addGrant({ scope: "fill", domains: ["localhost"], tools: [FILL_TOOL], approval: "always" });
+})();
+async function fillFromVault(message) {
+  await vaultReady;
+  const scan = await scanTab(browser, message.tabId);
+  const wall = message.kind ? { kind: message.kind } : (scan.walls.find((w) => w.selector === message.selector) ?? { kind: "password", selector: message.selector });
+  if (message.reloadFirst) {
+    await browser.tabs.reload(message.tabId);
+    // Wait for the new document, not only for "complete": the old one is complete too.
+    const fresh = async () => (await browser.webNavigation.getFrame({ tabId: message.tabId, frameId: 0 }))?.documentId !== scan.documentId && (await browser.tabs.get(message.tabId)).status === "complete";
+    for (let i = 0; i < 50 && !(await fresh()); i++) await new Promise((r) => setTimeout(r, 100));
+  }
+  const request = { vault, handle: "vault:acorn-password", tabId: message.tabId, scan, wall };
+  if (message.reloadFirst) {
+    // The user approves at once, so the fill reaches foxvault's page check.
+    const asked = await fillWall(request);
+    if (asked.status !== "ask") return asked;
+    return fillWall({ ...request, token: await fillGate.host.approve(asked.requestId) });
+  }
+  const token = message.approve ? await fillGate.host.approve(message.approve) : undefined;
+  return fillWall({ ...request, token });
+}
+
 const toolFor = (tabId) => handoffTool({ handoff, browser, tabId: () => tabId });
 
 browser.runtime.onMessage.addListener(async (message) => {
@@ -107,6 +140,8 @@ browser.runtime.onMessage.addListener(async (message) => {
   if (message?.type === "handoff-result") return results.get(message.id) ?? null;
   if (message?.type === "cancel") return controllers.get(message.id)?.abort() ?? true;
   if (message?.type === "events") return events;
+  if (message?.type === "fill-wall") return fillFromVault(message);
+  if (message?.type === "fill-pending") return fillGate.host.pending();
   if (message?.type === "agent") return startAgent(message);
   if (message?.type === "popup-state") return popupState(message.tabId);
   if (message?.type === "run") return runFromPopup(message.tabId);
