@@ -97,3 +97,12 @@ in the git history.
 | V2 | The agent fills a CAPTCHA, a passkey, or a consent screen. | Status `refused`, reason `wrong-kind`. | e2e |
 | V3 | Fill skips the foxgate approval or the host check. | foxpass calls `vault.fill`, which checks the secret's hosts and asks foxgate. The approval shows the host and the selector. | e2e |
 | V4 | The page changes between the scan and the fill. | foxpass passes the scanned `documentId`, so foxvault refuses `page-changed`. | e2e |
+
+## Demo popup
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| D1 | The popup runs the agent on its own page, not on the site. | The popup picks the web tab the user was on last. | e2e |
+| D2 | The user does not see that the agent waits for them. | The popup says which step waits, and the toolbar button shows a badge until the handoff ends. | e2e |
+| D3 | A site without access makes the run fail. | The popup shows an Allow button for that site instead of Run. | e2e |
+| D4 | The popup shows a typed value. | The popup shows statuses and summaries only. The E2E test looks for the typed values in the popup text. | e2e |

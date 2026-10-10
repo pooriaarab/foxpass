@@ -233,6 +233,44 @@ try {
   await quiet.close();
   check("L4 a tab that is gone: domain throws", "throws", await send({ type: "tool-domain", tabId: quietTab }));
   check("L5 the model can pass only a short reason", { type: "object", properties: { reason: { type: "string", maxLength: 200 } }, additionalProperties: false }, await send({ type: "tool-schema" }));
+
+  // D1-D4: the popup runs the agent on the last web tab and shows its state.
+  const site2 = await fox.open(`${base}/login.html?d=1`);
+  const popup = await fox.openExtensionPage("popup.html");
+  const popupText = () => popup.evaluate(() => document.body.innerText);
+  const until = (page, text) => poll(page, (t) => (document.body.innerText.includes(t) ? document.body.innerText : null), text);
+  await until(popup, "localhost");
+  check("D3 a site with access shows Run, not Allow", [false, true], await popup.evaluate(() => [!document.getElementById("allow").hidden, !document.getElementById("run").hidden]));
+  await popup.evaluate(() => document.getElementById("run").click());
+  check("D1 the run goes to the web tab, and D2 the popup names the step", true, (await until(popup, "Waiting for you")).includes("password"));
+  const badge = await poll(ext, async (u) => {
+    const tab = (await browser.tabs.query({})).find((t) => t.url === u);
+    return (await browser.action.getBadgeText({ tabId: tab.id })) || null;
+  }, `${base}/login.html?d=1`);
+  check("D2 the toolbar button shows a badge while the agent waits", "!", badge);
+  if (process.argv.includes("--shots")) {
+    await site2.bringToFront();
+    await site2.screenshot({ path: "artifacts/shot-banner.png" });
+    record.popupWaiting = await popup.evaluate(() => browser.runtime.sendMessage({ type: "popup-state", tabId: Number(document.body.dataset.tab) }));
+  }
+  await site2.type("#email", EMAIL);
+  await site2.type("#password", PASSWORD);
+  await site2.click("button[type=submit]");
+  await poll(site2, () => (location.pathname.endsWith("otp.html") && document.readyState === "complete") || null);
+  await site2.type("#otp", CODE);
+  await site2.click("button[type=submit]");
+  check("D2 the popup shows the result", true, (await until(popup, "Your balance is $1,204.56.")).length > 0);
+  check("D2 the badge is gone after the handoff", "", await ext.evaluate(async (u) => browser.action.getBadgeText({ tabId: (await browser.tabs.query({})).find((t) => t.url?.startsWith(u)).id }), `${base}/account.html`));
+  check("D4 the popup shows no password and no code", [], leaks(await popupText()).filter((v) => v !== EMAIL));
+  if (process.argv.includes("--shots")) record.popupDone = await popup.evaluate(() => browser.runtime.sendMessage({ type: "popup-state", tabId: Number(document.body.dataset.tab) }));
+  await site2.close();
+  // D3: a tab on a host with no access. The E2E build has access to localhost and 127.0.0.1 only.
+  const noAccess = await fox.open(`data:text/html,<title>x</title><h1>No access</h1>`);
+  await popup.reload();
+  await poll(popup, () => document.body.dataset.tab || null);
+  check("D3 a site without access shows Allow, not Run", [true, false], await popup.evaluate(() => [!document.getElementById("allow").hidden, !document.getElementById("run").hidden]));
+  await noAccess.close();
+  await popup.close();
 } catch (error) {
   record.error = error instanceof Error ? error.message : String(error);
 } finally {
