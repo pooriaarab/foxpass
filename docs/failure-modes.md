@@ -106,3 +106,17 @@ in the git history.
 | D2 | The user does not see that the agent waits for them. | The popup says which step waits, and the toolbar button shows a badge until the handoff ends. | e2e |
 | D3 | A site without access makes the run fail. | The popup shows an Allow button for that site instead of Run. | e2e |
 | D4 | The popup shows a typed value. | The popup shows statuses and summaries only. The E2E test looks for the typed values in the popup text. | e2e |
+
+## Passkey handoff (`e2e/passkey.mjs`)
+
+This test drives Firefox over Marionette, because WebDriver BiDi has no
+WebAuthn commands. Firefox first waits for a USB key, so the request stays
+pending, as it does for a real user. The test then acts as the user with a
+virtual authenticator.
+
+| # | Failure mode | Wanted behaviour | Test |
+|---|---|---|---|
+| P1 | A passkey request that waits for the user is missed. | A `webauthn` wall with the RP ID. The agent waits, and the banner says to use a passkey. | e2e |
+| P2 | The observer breaks a real passkey sign-in. | The page gets its credential through the observer, and the authenticator signs one assertion. | e2e |
+| P3 | The agent sees the passkey result. | The observer record holds the kind, RP ID, state, conditional flag, and time only. The planner context and the agent events hold no credential ID. | e2e |
+| P4 | The agent does not go on after the passkey. | The handoff ends `signed-in`, and the agent reads the balance. | e2e |
