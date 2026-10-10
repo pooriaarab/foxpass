@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" /><title>Passkey - Acorn Bank</title><link rel="stylesheet" href="style.css" />
+    <script>
+      // Ask for a passkey as soon as the page starts, as some sites do.
+      // Failure mode S4: the observer must see this early call.
+      window.passkeyResults = [];
+      function askForPasskey() {
+        const publicKey = { challenge: crypto.getRandomValues(new Uint8Array(32)), rpId: location.hostname, userVerification: "preferred", timeout: 120000 };
+        const promise = navigator.credentials.get({ publicKey });
+        promise.then(
+          (credential) => {
+            window.passkeyResults.push(`fulfilled:${credential.type}`);
+            document.cookie = "acorn_session=signed-in; path=/; SameSite=Lax";
+            location.href = "account.html";
+          },
+          (error) => window.passkeyResults.push(`rejected:${error.name}`),
+        );
+        return promise;
+      }
+      askForPasskey();
+    </script>
+  </head>
+  <body>
+    <main>
+      <h1>Sign in with a passkey</h1>
+      <p>Use the passkey on this device or your security key.</p>
+      <button id="retry" type="button" onclick="askForPasskey()">Use a passkey</button>
+    </main>
+  </body>
+</html>
