@@ -17,6 +17,12 @@ importers:
       esbuild:
         specifier: ^0.28.2
         version: 0.28.2
+      foxgate:
+        specifier: ^0.1.2
+        version: 0.1.2
+      foxloop:
+        specifier: ^0.1.2
+        version: 0.1.2
       oxlint:
         specifier: ^1.87.0
         version: 1.87.0
@@ -1155,6 +1161,18 @@ packages:
 
   flatted@3.4.4:
     resolution: {integrity: sha512-5+ybhBZANEJxaH3X5evAFatUxLfEHSr7n6kYJ+1Qd0mUqr4eu9gIf6GDbWHf8RJijHrjjO8G+la14SlL2SeS1Q==}
+
+  foxgate@0.1.2:
+    resolution: {integrity: sha512-wI6mVtzx88PEn8QFPR2ACwhoV4CegNk6p80ZN1L1repV3ER2yDzBFf1cdjxncXwz/C9JlvOQ2CYNsCZ389mX2w==}
+    engines: {node: '>=24'}
+
+  foxloop@0.1.2:
+    resolution: {integrity: sha512-EXTVI96J/6tPkFHg4y/USF5NTHGDiTiebBGCAJ7JTCTXRcvc/K1uRPH0gB/VHktyw0VzvFUNVSNuXJj7HVHUjQ==}
+    engines: {node: '>=24'}
+
+  foxpaw@0.1.0:
+    resolution: {integrity: sha512-kYYNAOjK60ExTND4JNGkScfXAvY3Uq0KrYuqRfP2gbbjmgX6FMhwrnFRDVWrZWR81gMZKolcdGxxSKvN3guUbw==}
+    engines: {node: '>=24'}
 
   fs-extra@11.4.1:
     resolution: {integrity: sha512-KYAb4c9BJQI6QqGKthV68OHe0badztdXJWKo0WtBA9IuCFPTKvE5ZdUBglP833aMjhaSPNO4A5j/EkzZtGlKjA==}
@@ -2986,6 +3004,15 @@ snapshots:
       keyv: 4.5.4
 
   flatted@3.4.4: {}
+
+  foxgate@0.1.2: {}
+
+  foxloop@0.1.2:
+    dependencies:
+      foxgate: 0.1.2
+      foxpaw: 0.1.0
+
+  foxpaw@0.1.0: {}
 
   fs-extra@11.4.1:
     dependencies:
