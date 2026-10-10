@@ -76,6 +76,7 @@ in the git history.
 | H15 | Two handoffs run on one tab and fight over the banner. | The second one gets status `busy`. | e2e |
 | H16 | The user goes to another site, and that counts as signed in. | A new host counts only when it is in `hosts`. Else the handoff waits. | e2e |
 | H17 | A bad `timeoutMs` or `pollMs` makes the handoff spin or never end. | `createHandoff` throws `bad-option` for `timeoutMs` outside 1 s to 30 min, or `pollMs` outside 100 ms to 10 s. | e2e |
+| H18 | The tab closes while the first scan runs. The scan fails, and a failed scan reads as "no wall", so the handoff ends `no-wall` instead of `tab-closed`. CI found this on a slower runner. | A failed first scan is not "no wall". foxpass emits `scan-failed`, waits one poll, and ends `tab-closed` when the tab is gone or `tabs.onRemoved` fired for it. Else it scans again, 3 times at most. | tests/handoff.test.ts |
 
 ## Agent tool (`handoffTool`)
 
