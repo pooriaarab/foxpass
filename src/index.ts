@@ -1,2 +1,3 @@
-// The public API of foxpass. Replace this export with the real one.
-export const name = "foxpass";
+export { FoxpassError, type FoxpassErrorCode } from "./errors.js";
+export { classify } from "./classify.js";
+export type { ButtonInfo, FieldInfo, PageScan, Wall, WallKind, WebAuthnCall } from "./types.js";
