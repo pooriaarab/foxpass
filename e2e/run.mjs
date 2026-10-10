@@ -43,6 +43,11 @@ try {
   check("S1 login scan says the password field is filled", true, loginScan.scan.fields.find((f) => f.selector === "#password")?.filled);
   const found = await login.evaluate((selectors) => selectors.map((s) => document.querySelectorAll(s).length), loginScan.scan.fields.map((f) => f.selector));
   check("S2 each field selector finds one element", true, found.length > 0 && found.every((n) => n === 1));
+  // R1: what an agent reads has the password redacted, and the email as typed.
+  const loginRead = await send({ type: "read", tabId: await tabOf("login.html") });
+  check("R1 the agent's read of the login page holds no password", [], leaks(loginRead).filter((s) => s !== EMAIL));
+  check("R1 the password field reads [redacted]", "[redacted]", loginRead.fields.find((f) => f.id === "password")?.value);
+  check("R1 a plain field keeps its value", EMAIL, loginRead.fields.find((f) => f.id === "email")?.value);
   await login.close();
 
   // C4, S1: the OTP page.
@@ -51,6 +56,9 @@ try {
   const otpScan = await scanOf("otp.html");
   check("C4 OTP page: one otp wall", ["otp #otp"], kinds(otpScan));
   check("S1 OTP scan holds no typed value", [], leaks(otpScan));
+  const otpRead = await send({ type: "read", tabId: await tabOf("otp.html") });
+  check("R2 the agent's read of the OTP page holds no code", [], leaks(otpRead));
+  check("R2 the OTP field reads [redacted]", "[redacted]", otpRead.fields.find((f) => f.id === "otp")?.value);
   await otp.close();
 
   // S3, S4: the observer sees a WebAuthn call that the page makes in <head>,
