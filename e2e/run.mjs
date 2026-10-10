@@ -273,6 +273,29 @@ try {
   check("D3 a site without access shows Allow, not Run", [true, false], await popup2.evaluate(() => [!document.getElementById("allow").hidden, !document.getElementById("run").hidden]));
   for (const page of await fox.browser.pages()) if (page.url().includes("[::1]")) await page.close();
   await popup2.close();
+
+  // V1-V4: fill a foxvault secret into one wall field, after an exact approval.
+  const vaultPage = await fox.open(`${base}/login.html?v=1`);
+  const vaultTab = await tabOf("login.html?v=1");
+  const fill = (selector, extra = {}) => send({ type: "fill-wall", tabId: vaultTab, selector, ...extra });
+  check("V1 a field that is not a wall is refused", { status: "refused", reason: "not-a-wall-field" }, await fill("#email"));
+  const asked = await fill("#password");
+  check("V3 the first fill asks foxgate", "ask", asked.status);
+  const request = (await send({ type: "fill-pending" })).find((r) => r.id === asked.requestId);
+  check("V3 the approval text shows the host and the field", [true, true], [request?.text.includes('"domain":"localhost"'), request?.text.includes("#password")]);
+  check("V3 the approval text holds no value", [], leaks(request));
+  const filled = await fill("#password", { approve: asked.requestId });
+  check("V3 the approved fill fills the field", { status: "filled", host: "localhost" }, filled);
+  check("V3 the field holds the secret", PASSWORD, await vaultPage.evaluate(() => document.getElementById("password").value));
+  check("V3 what the agent reads shows [redacted]", "[redacted]", (await send({ type: "read", tabId: vaultTab })).fields.find((f) => f.id === "password")?.value);
+  // V4: the page changes after the scan.
+  const stale = await send({ type: "fill-wall", tabId: vaultTab, selector: "#password", reloadFirst: true });
+  check("V4 a page that changed after the scan is refused", { status: "refused", reason: "page-changed" }, stale);
+  await vaultPage.close();
+  // V2: a wall that is not a field kind.
+  const captchaPage = await fox.open(`${base}/captcha.html?v=2`);
+  check("V2 a CAPTCHA wall is refused", { status: "refused", reason: "wrong-kind" }, await send({ type: "fill-wall", tabId: await tabOf("captcha.html?v=2"), kind: "captcha" }));
+  await captchaPage.close();
 } catch (error) {
   record.error = error instanceof Error ? error.message : String(error);
 } finally {
