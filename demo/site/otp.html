@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8" /><title>Enter your code - Acorn Bank</title><link rel="stylesheet" href="style.css" /></head>
+  <body>
+    <main>
+      <h1>Enter your code</h1>
+      <p>We sent a 6-digit code to your phone.</p>
+      <form id="verify">
+        <label for="otp">Code</label>
+        <input id="otp" name="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" />
+        <button type="submit">Verify</button>
+        <p id="error" class="error" hidden>That code is not right.</p>
+      </form>
+      <p class="note">Test code: 424242.</p>
+    </main>
+    <script>
+      document.getElementById("verify").addEventListener("submit", (event) => {
+        event.preventDefault();
+        if (document.getElementById("otp").value !== "424242") return void (document.getElementById("error").hidden = false);
+        document.cookie = "acorn_session=signed-in; path=/; SameSite=Lax";
+        location.href = "account.html";
+      });
+    </script>
+  </body>
+</html>

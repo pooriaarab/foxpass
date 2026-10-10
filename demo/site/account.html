@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8" /><title>Your account - Acorn Bank</title><link rel="stylesheet" href="style.css" /></head>
+  <body>
+    <main>
+      <h1>Your account</h1>
+      <p id="balance"></p>
+    </main>
+    <script>
+      if (!document.cookie.includes("acorn_session=signed-in")) location.replace("login.html");
+      else document.getElementById("balance").textContent = "Balance: $1,204.56";
+    </script>
+  </body>
+</html>
