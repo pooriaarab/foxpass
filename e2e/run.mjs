@@ -185,7 +185,6 @@ try {
 
   // The agent: a foxloop run with a fixed rule planner, the foxpass read
   // tool, and the foxpass handoff tool. The test acts as the user.
-  const agentState = (id) => send({ type: "agent-state", id });
   const agentDone = (id, timeoutMs = 30000) => poll(ext, async (i) => {
     const state = await browser.runtime.sendMessage({ type: "agent-state", id: i });
     return state.status === "running" ? null : state;

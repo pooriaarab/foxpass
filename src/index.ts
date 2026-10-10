@@ -7,3 +7,4 @@ export { observeWebAuthn } from "./page/observer.js";
 export type { ButtonInfo, FieldInfo, PageScan, PageSnapshot, Wall, WallKind, WebAuthnCall } from "./types.js";
 export { REDACTED, isSecretField, redactSnapshot, type SnapshotField } from "./redact.js";
 export { createHandoff, messageFor, type Handoff, type HandoffBrowser, type HandoffEvent, type HandoffOptions, type HandoffRequest, type HandoffResult, type Notice, type SignInSignal } from "./handoff.js";
+export { handoffTool, readPageTool, type AgentTool, type CheckResult, type TabBrowser, type ToolOutput } from "./tools.js";
