@@ -30,7 +30,8 @@ await build({
 for (const file of files.filter((f) => !f.endsWith(".js") && f !== "amo-metadata.json")) cpSync(`extension/${file}`, `${out}/${file}`, { recursive: true });
 if (e2e) {
   // The E2E test serves demo/site/ on localhost. The release build asks the user for each site instead.
-  const withHosts = { ...manifest, host_permissions: ["http://localhost/*", "http://127.0.0.1/*"] };
+  // "tabs" lets the test find a data: tab that foxpass cannot script (failure modes H10, H13).
+  const withHosts = { ...manifest, permissions: [...manifest.permissions, "tabs"], host_permissions: ["http://localhost/*", "http://127.0.0.1/*"] };
   writeFileSync(`${out}/manifest.json`, `${JSON.stringify(withHosts, null, 2)}\n`);
 }
 console.log(`Built ${out}/ (version ${pkg.version}).`);

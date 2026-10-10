@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8" /><title>Sign in - Acorn Bank</title><link rel="stylesheet" href="style.css" /></head>
+  <body>
+    <main>
+      <h1>Sign in to Acorn Bank</h1>
+      <!-- A single-page sign-in: the form goes away and the URL stays (failure mode H5). -->
+      <form id="login">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" autocomplete="username" />
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+      <p id="welcome" hidden>Welcome back.</p>
+    </main>
+    <script>
+      document.getElementById("login").addEventListener("submit", (event) => {
+        event.preventDefault();
+        document.getElementById("login").remove();
+        document.getElementById("welcome").hidden = false;
+      });
+    </script>
+  </body>
+</html>

@@ -12,6 +12,7 @@ const SECRETS = [PASSWORD, EMAIL, CODE];
 const record = { startedAt: new Date().toISOString(), checks: [] };
 const check = (name, expected, actual) => record.checks.push({ name, expected, actual, ok: JSON.stringify(actual) === JSON.stringify(expected) });
 const kinds = (result) => result.walls.map((w) => `${w.kind}${w.selector ? ` ${w.selector}` : ""}`);
+const banner = (page) => page.evaluate(() => document.getElementById("foxpass-banner")?.shadowRoot?.textContent ?? null);
 const leaks = (value) => SECRETS.filter((s) => JSON.stringify(value).includes(s));
 
 // The demo has no host access in the release build. The E2E build adds
@@ -86,6 +87,101 @@ try {
   check("C9 newsletter page: no wall", [], kinds(plainScan));
   check("S5 the observer made no WebAuthn call by itself", [], plainScan.scan.webauthn);
   await plain.close();
+
+  // The handoff. Each run gets an id. The background keeps its result, its
+  // events, and the notices that the notify hook got.
+  let runs = 0;
+  const handoff = async (path, options = {}) => {
+    const id = `run-${++runs}`;
+    await send({ type: "handoff", id, tabId: await tabOf(path), ...options });
+    return id;
+  };
+  const resultOf = (id, timeoutMs = 20000) => poll(ext, (i) => browser.runtime.sendMessage({ type: "handoff-result", id: i }), id, timeoutMs);
+  const eventsOf = async (id) => (await send({ type: "events" })).filter((e) => e.run === id);
+  const activeUrl = () => ext.evaluate(async () => (await browser.tabs.query({ active: true, lastFocusedWindow: true }))[0]?.url);
+
+  // H12: no wall, no pause.
+  const none = await fox.open(`${base}/plain.html?h=12`);
+  check("H12 a page with no wall ends at once", { status: "no-wall" }, await resultOf(await handoff("plain.html?h=12")));
+  await none.close();
+
+  // H3, H4, H14, and the notify hook: password, then OTP, then the account page.
+  const flow = await fox.open(`${base}/login.html?h=3`);
+  // Put the extension page in front, so the handoff must bring the wall tab back.
+  await ext.evaluate(async () => browser.tabs.update((await browser.tabs.getCurrent()).id, { active: true }));
+  const flowRun = await handoff("login.html?h=3");
+  check("H3 the wall tab comes to the front", `${base}/login.html?h=3`, await poll(ext, async (u) => ((await browser.tabs.query({ active: true, lastFocusedWindow: true }))[0]?.url === u ? u : null), `${base}/login.html?h=3`).catch(() => activeUrl()));
+  check("H3 the banner tells the user what to do", true, (await poll(flow, () => document.getElementById("foxpass-banner")?.shadowRoot?.textContent ?? null)).includes("password"));
+  check("H3 the password field is outlined", "true", await flow.evaluate(() => document.getElementById("password").dataset.foxpassHighlight ?? null));
+  // The test now acts as the user.
+  await flow.type("#email", EMAIL);
+  await flow.type("#password", PASSWORD);
+  await flow.click("button[type=submit]");
+  await poll(flow, () => (location.pathname.endsWith("otp.html") && document.readyState === "complete") || null);
+  check("H4 the OTP page is a new step, not a sign-in", true, await poll(ext, async (i) => ((await browser.runtime.sendMessage({ type: "events" })).some((e) => e.run === i && e.type === "wall-changed") ? true : null), flowRun));
+  check("H4 the banner moves to the OTP step", true, (await poll(flow, () => document.getElementById("foxpass-banner")?.shadowRoot?.textContent ?? null)).includes("code"));
+  await flow.type("#otp", CODE);
+  await flow.click("button[type=submit]");
+  const flowResult = await resultOf(flowRun);
+  check("H3 signed in when the account page has no wall", { status: "signed-in", signal: "url-changed", host: "localhost" }, flowResult);
+  const flowEvents = await eventsOf(flowRun);
+  check("H4 the events show the steps in order", ["paused", "wall-changed", "resumed", "ended"], flowEvents.map((e) => e.type).filter((t) => t !== "notice"));
+  check("H14 no event holds a typed value", [], leaks(flowEvents));
+  check("notify hook got one notice for the password step", [{ kind: "password", host: "localhost" }], flowEvents.filter((e) => e.type === "notice").map((e) => ({ kind: e.kind, host: e.host })));
+  await flow.close();
+
+  // H2, H8: nobody signs in, and the notify hook throws.
+  const idle = await fox.open(`${base}/login.html?h=2`);
+  const idleRun = await handoff("login.html?h=2", { timeoutMs: 1500, notifyThrows: true });
+  check("H2 the handoff times out", { status: "timeout" }, await resultOf(idleRun));
+  check("H2 the banner is gone after the timeout", null, await banner(idle));
+  check("H8 a notify hook that throws does not stop the handoff", true, (await eventsOf(idleRun)).some((e) => e.type === "notify-failed"));
+  // H15: a second handoff on a tab that already waits.
+  const busyRun = await handoff("login.html?h=2", { timeoutMs: 1500 });
+  check("H15 a second handoff on one tab gets busy", { status: "busy" }, await resultOf(await handoff("login.html?h=2")));
+  await resultOf(busyRun);
+  // H11: the agent run stops.
+  const cancelRun = await handoff("login.html?h=2", { timeoutMs: 60000 });
+  await send({ type: "cancel", id: cancelRun });
+  check("H11 an abort ends the handoff", { status: "cancelled" }, await resultOf(cancelRun));
+  // H16: the user goes to another host that has no wall.
+  const awayRun = await handoff("login.html?h=2", { timeoutMs: 2500 });
+  await idle.goto(`${site.url}/plain.html`);
+  check("H16 another host with no wall is not a sign-in", { status: "timeout" }, await resultOf(awayRun));
+  // H1: the user closes the tab.
+  const closing = await fox.open(`${base}/login.html?h=1`);
+  const closeRun = await handoff("login.html?h=1", { timeoutMs: 60000 });
+  await closing.close();
+  check("H1 a closed tab ends the handoff", { status: "tab-closed" }, await resultOf(closeRun));
+  await idle.close();
+
+  // H5: the form goes away and the URL stays.
+  const spa = await fox.open(`${base}/spa.html`);
+  const spaRun = await handoff("spa.html");
+  await spa.type("#password", PASSWORD);
+  await spa.click("button[type=submit]");
+  check("H5 a form that goes away is a sign-in", { status: "signed-in", signal: "form-gone", host: "localhost" }, await resultOf(spaRun));
+  await spa.close();
+
+  // H6, H7: only a cookie shows the sign-in, and the custom check throws.
+  const remember = await fox.open(`${base}/remember.html`);
+  const rememberRun = await handoff("remember.html", { cookie: { url: `${base}/`, name: "acorn_device" }, checkThrows: true });
+  await new Promise((r) => setTimeout(r, 600));
+  await remember.type("#otp", CODE);
+  await remember.click("button[type=submit]");
+  check("H6 a new cookie is a sign-in", { status: "signed-in", signal: "cookie", host: "localhost" }, await resultOf(rememberRun));
+  check("H7 a check that throws does not stop the handoff", true, (await eventsOf(rememberRun)).some((e) => e.type === "check-failed"));
+  await remember.close();
+
+  // H10, H13: a tab that foxpass cannot script. The banner and the scans fail, and the handoff waits on.
+  const blank = await fox.open(`data:text/html,<h1>No access</h1>`);
+  const blankTab = await poll(ext, async () => (await browser.tabs.query({})).find((t) => t.url?.startsWith("data:"))?.id);
+  const blankRun = `run-${++runs}`;
+  await send({ type: "handoff", id: blankRun, tabId: blankTab, timeoutMs: 1500, walls: [{ kind: "password", reason: "given by the test", selector: "#password", host: "localhost" }] });
+  check("H13 a banner that cannot go in does not stop the handoff", { status: "timeout" }, await resultOf(blankRun));
+  const blankEvents = (await eventsOf(blankRun)).map((e) => e.type);
+  check("H13 highlight-failed and H10 scan-failed are events", [true, true], [blankEvents.includes("highlight-failed"), blankEvents.includes("scan-failed")]);
+  await blank.close();
 } catch (error) {
   record.error = error instanceof Error ? error.message : String(error);
 } finally {
