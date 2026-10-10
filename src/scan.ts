@@ -12,7 +12,7 @@ export interface ScanBrowser {
     getFrame(details: { tabId: number; frameId: number }): Promise<{ url: string; documentId?: string } | null | undefined>;
   };
   scripting: {
-    executeScript(injection: { target: { tabId: number; documentIds?: string[]; frameIds?: number[] }; func: (...args: string[]) => PageScan | PageSnapshot; args?: string[] }): Promise<{ result?: unknown }[]>;
+    executeScript(injection: { target: { tabId: number; documentIds?: string[]; frameIds?: number[] }; func: (...args: never[]) => unknown; args?: unknown[] }): Promise<{ result?: unknown }[]>;
   };
 }
 
