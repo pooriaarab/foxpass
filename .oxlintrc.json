@@ -4,5 +4,11 @@
     "correctness": "error",
     "suspicious": "warn"
   },
+  "overrides": [
+    {
+      "files": ["src/page/*.ts"],
+      "rules": { "unicorn/consistent-function-scoping": "off" }
+    }
+  ],
   "ignorePatterns": ["dist", "dist-ext", "artifacts"]
 }
