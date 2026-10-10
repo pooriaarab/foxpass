@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8" /><title>Sign in - Acorn Bank</title><link rel="stylesheet" href="style.css" /></head>
+  <body>
+    <main>
+      <h1>Sign in to Acorn Bank</h1>
+      <form id="login">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" autocomplete="username" />
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" />
+        <!-- A hidden field that bots fill. It is not a wall (failure mode C1). -->
+        <input id="trap" name="trap_password" type="password" style="display: none" tabindex="-1" />
+        <button type="submit">Sign in</button>
+        <p id="error" class="error" hidden>That email and password do not match.</p>
+      </form>
+      <p class="note">Test login: ada@example.com, password "correct horse".</p>
+    </main>
+    <script>
+      document.getElementById("login").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const ok = document.getElementById("email").value === "ada@example.com" && document.getElementById("password").value === "correct horse";
+        if (ok) location.href = "otp.html";
+        else document.getElementById("error").hidden = false;
+      });
+    </script>
+  </body>
+</html>
