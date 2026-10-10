@@ -182,6 +182,58 @@ try {
   const blankEvents = (await eventsOf(blankRun)).map((e) => e.type);
   check("H13 highlight-failed and H10 scan-failed are events", [true, true], [blankEvents.includes("highlight-failed"), blankEvents.includes("scan-failed")]);
   await blank.close();
+
+  // The agent: a foxloop run with a fixed rule planner, the foxpass read
+  // tool, and the foxpass handoff tool. The test acts as the user.
+  const agentState = (id) => send({ type: "agent-state", id });
+  const agentDone = (id, timeoutMs = 30000) => poll(ext, async (i) => {
+    const state = await browser.runtime.sendMessage({ type: "agent-state", id: i });
+    return state.status === "running" ? null : state;
+  }, id, timeoutMs);
+  const waitingFor = (id) => poll(ext, async (i) => {
+    const state = await browser.runtime.sendMessage({ type: "agent-state", id: i });
+    return state.waiting ? state : null;
+  }, id);
+
+  // L1: the full run. The planner never sees the password or the code.
+  const bank = await fox.open(`${base}/login.html?l=1`);
+  await send({ type: "agent", id: "agent-1", tabId: await tabOf("login.html?l=1") });
+  check("L1 the agent pauses for the user on the password step", "password", (await waitingFor("agent-1")).waiting);
+  await bank.type("#email", EMAIL);
+  await bank.type("#password", PASSWORD);
+  await bank.click("button[type=submit]");
+  await poll(bank, () => (location.pathname.endsWith("otp.html") && document.readyState === "complete") || null);
+  await bank.type("#otp", CODE);
+  await bank.click("button[type=submit]");
+  const agent1 = await agentDone("agent-1");
+  check("L1 the agent goes on after the sign-in and reads the balance", { status: "done", summary: "Your balance is $1,204.56." }, { status: agent1.status, summary: agent1.summary });
+  check("L1 the agent called the tools in order", ["read_page", "hand_to_user", "read_page"], agent1.events.filter((e) => e.type === "tool-call").map((e) => e.name));
+  const planner = await send({ type: "agent-planner", id: "agent-1" });
+  check("L1 the planner saw the pages", true, JSON.stringify(planner).includes("Balance: $1,204.56"));
+  check("L1 the planner context holds no password and no code", [], leaks(planner).filter((v) => v !== EMAIL));
+  check("L1 the agent events hold no password and no code", [], leaks(agent1.events).filter((v) => v !== EMAIL));
+  await bank.close();
+
+  // L2: nobody signs in. L6: the run stops while the user signs in.
+  const slow = await fox.open(`${base}/login.html?l=2`);
+  await send({ type: "agent", id: "agent-2", tabId: await tabOf("login.html?l=2"), handoffTimeoutMs: 1500 });
+  const agent2 = await agentDone("agent-2");
+  const handResult = agent2.events.find((e) => e.type === "tool-result" && e.name === "hand_to_user");
+  check("L2 a handoff that times out is a failed result", { ok: false, timeout: true }, { ok: handResult?.ok, timeout: handResult?.summary.includes("did not finish") });
+  await send({ type: "agent", id: "agent-3", tabId: await tabOf("login.html?l=2") });
+  await waitingFor("agent-3");
+  await send({ type: "agent-cancel", id: "agent-3" });
+  const agent3 = await agentDone("agent-3");
+  check("L6 a stopped run stops the handoff", ["aborted", "cancelled"], [agent3.status, (await eventsOf("agent-3")).find((e) => e.type === "ended")?.status]);
+  await slow.close();
+
+  // L3, L4, L5: the tool on its own.
+  const quiet = await fox.open(`${base}/plain.html?l=3`);
+  const quietTab = await tabOf("plain.html?l=3");
+  check("L3 no wall: the tool passes at once", { ok: true, summary: "No sign-in step on this page." }, await send({ type: "tool", tabId: quietTab }));
+  await quiet.close();
+  check("L4 a tab that is gone: domain throws", "throws", await send({ type: "tool-domain", tabId: quietTab }));
+  check("L5 the model can pass only a short reason", { type: "object", properties: { reason: { type: "string", maxLength: 200 } }, additionalProperties: false }, await send({ type: "tool-schema" }));
 } catch (error) {
   record.error = error instanceof Error ? error.message : String(error);
 } finally {
