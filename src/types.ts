@@ -67,3 +67,24 @@ export interface Wall {
   selector?: string;
   host: string;
 }
+
+/** What `readTab` gives an agent: page text and fields, with secret values redacted. */
+export interface PageSnapshot {
+  url: string;
+  title: string;
+  /** Visible text of the page, up to 4000 characters. */
+  text: string;
+  fields: {
+    type: string;
+    autocomplete: string;
+    name: string;
+    id: string;
+    label: string;
+    placeholder: string;
+    inputMode: string;
+    maxLength: number;
+    /** A password, code, or card field. Its value is `[redacted]`. */
+    secret: boolean;
+    value: string;
+  }[];
+}

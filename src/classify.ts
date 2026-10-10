@@ -5,8 +5,10 @@ import type { FieldInfo, PageScan, Wall, WallKind } from "./types.js";
 
 const ORDER: WallKind[] = ["webauthn", "captcha", "oauth-consent", "otp", "password", "sign-in"];
 
-const CODE_WORDS = /\b(otp|one time|2fa|two factor|mfa|totp|passcode|verification|verify|security code|auth code|authentication code|sms code|code)\b/;
-const NOT_OTP = /coupon|promo|gift|postal|post code|postcode|zip|discount|voucher|referral|country|area code|invite/;
+/** Words that name a one-time code field, after `words()`. */
+export const CODE_WORDS = /\b(otp|one time|2fa|two factor|mfa|totp|passcode|verification|verify|security code|auth code|authentication code|sms code|code)\b/;
+/** Words that name a code field that is not a one-time code. */
+export const NOT_OTP = /coupon|promo|gift|postal|post code|postcode|zip|discount|voucher|referral|country|area code|invite/;
 const IDENTIFIER = /\b(user|username|login|email|e mail|identifier|account|phone)\b/;
 const SIGN_IN_BUTTON = /\b(sign in|log in|login|next)\b/;
 const SIGN_IN_HEADING = /\b(sign in|log in|login)\b/;
@@ -20,12 +22,14 @@ const CAPTCHA_FRAMES: [RegExp, string][] = [
 const CAPTCHA_MARKS: Record<string, string> = { "g-recaptcha": "reCAPTCHA", "h-captcha": "hCaptcha", "cf-turnstile": "Turnstile" };
 
 /** Lower case, with `_ - .` and camelCase turned into spaces. */
-const words = (text: string) =>
+export const words = (text: string) =>
   text
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .toLowerCase()
     .replace(/[_\-.]+/g, " ");
-const describe = (f: FieldInfo) => words(`${f.name} ${f.id} ${f.label} ${f.placeholder}`);
+/** The parts of a field that name it. Other readers (for example foxpaw) give only some of them. */
+export type FieldHints = Partial<Pick<FieldInfo, "type" | "autocomplete" | "name" | "id" | "label" | "placeholder" | "inputMode" | "maxLength">>;
+const describe = (f: FieldHints) => words(`${f.name ?? ""} ${f.id ?? ""} ${f.label ?? ""} ${f.placeholder ?? ""}`);
 
 const isString = (v: unknown) => typeof v === "string";
 const isList = (v: unknown, item: (x: Record<string, unknown>) => boolean) =>
@@ -70,12 +74,15 @@ function oauthReason(url: URL): string | undefined {
   return `an OAuth consent URL (the path names authorization, the query has client_id${scope ? `, scope: ${scope.slice(0, 80)}` : ""})`;
 }
 
-function otpReason(f: FieldInfo): string | undefined {
-  if (f.autocomplete.toLowerCase().split(/\s+/).includes("one-time-code")) return "autocomplete=one-time-code";
-  if (f.autocomplete.toLowerCase().startsWith("cc-")) return undefined;
+/** Why a field is a one-time code field, or undefined when it is not one. */
+export function otpReason(f: FieldHints): string | undefined {
+  const autocomplete = (f.autocomplete ?? "").toLowerCase();
+  if (autocomplete.split(/\s+/).includes("one-time-code")) return "autocomplete=one-time-code";
+  if (autocomplete.startsWith("cc-")) return undefined;
   const text = describe(f);
   if (NOT_OTP.test(text) || !CODE_WORDS.test(text)) return undefined;
-  const short = (f.maxLength > 0 && f.maxLength <= 10) || f.inputMode === "numeric" || f.type === "tel" || f.type === "number";
+  const max = f.maxLength ?? -1;
+  const short = (max > 0 && max <= 10) || f.inputMode === "numeric" || f.type === "tel" || f.type === "number";
   return short ? `a short field named as a code ("${text.trim().slice(0, 60)}")` : undefined;
 }
 
