@@ -29,7 +29,7 @@ const TEST_FILE = /(^|[/._-])(e2e|fixtures?|tests?|spec)([/._-]|$)/i;
 const meta = JSON.parse(readFileSync(META_FILE, "utf8"));
 const manifest = JSON.parse(readFileSync("extension/manifest.json", "utf8"));
 const pkg = JSON.parse(readFileSync("package.json", "utf8"));
-const [, owner, repo] = /github\.com\/([^/]+)\/([^/]+?)(?:\.git)?$/.exec(pkg.repository?.url ?? "") ?? [];
+const repo = /github\.com\/pooriaarab\/([^/.]+)/.exec(pkg.repository?.url ?? "")?.[1];
 
 function en(field) {
   return typeof field === "object" && field !== null ? field["en-US"] : undefined;
@@ -58,9 +58,9 @@ function check() {
   if ((cats ?? []).length > 1 && cats.includes("other")) fail('AMO refuses "other" with another category');
   if (meta.version?.license !== "MIT") fail('version.license must be "MIT"');
   if (!meta.version?.approval_notes) fail("version.approval_notes must tell reviewers how to build and use the add-on");
-  if (!repo) fail("package.json repository.url must point to github.com/<owner>/<repo>");
-  if (en(meta.homepage) !== `https://github.com/${owner}/${repo}`) fail(`homepage must be https://github.com/${owner}/${repo}`);
-  if (en(meta.support_url) !== `https://github.com/${owner}/${repo}/issues`) fail(`support_url must be https://github.com/${owner}/${repo}/issues`);
+  if (!repo) fail("package.json repository.url must point to github.com/pooriaarab/<repo>");
+  if (en(meta.homepage) !== `https://github.com/pooriaarab/${repo}`) fail(`homepage must be https://github.com/pooriaarab/${repo}`);
+  if (en(meta.support_url) !== `https://github.com/pooriaarab/${repo}/issues`) fail(`support_url must be https://github.com/pooriaarab/${repo}/issues`);
   if (meta.slug !== undefined && !/^[\p{L}\p{N}_~-]+$/u.test(meta.slug)) fail("slug may hold only letters, numbers, -, _ and ~");
   const seen = {
     "manifest name": manifest.name,
@@ -96,7 +96,8 @@ function files(dir, prefix = "") {
 }
 
 // AR1-AR5: dist-ext/ is what release.yml signs, so it must hold no test-only
-// piece. A local host needs a reason per pattern and use (local_hosts, C29).
+// piece. A local host is allowed only with a reason in local_hosts for that
+// pattern AND that use (AR3, AR-U1): { "<pattern>": { "host_permission": "..." } }.
 function scanReleaseBuild(fail) {
   if (!existsSync("dist-ext/manifest.json")) {
     fail("dist-ext/ is missing; run pnpm build:ext (the release build) first");
@@ -107,7 +108,8 @@ function scanReleaseBuild(fail) {
   const allowed = [];
   const local = (use, where, pattern) => {
     if (!LOCAL_HOST.test(pattern)) return;
-    if (String(reasons[pattern]?.[use] ?? "").length >= 20) allowed.push(`${pattern} ${use}`);
+    const reason = reasons[pattern]?.[use];
+    if (typeof reason === "string" && reason.length >= 20) allowed.push(`${pattern} ${use}`);
     else fail(`the release build has ${where} "${pattern}"; move it to the e2e build, or give a reason in local_hosts["${pattern}"].${use}`);
   };
   for (const cs of built.content_scripts ?? []) for (const m of cs.matches ?? []) local("content_script", "a content script for", m);
@@ -115,6 +117,7 @@ function scanReleaseBuild(fail) {
   for (const m of built.externally_connectable?.matches ?? []) local("externally_connectable", "externally_connectable for", m);
   for (const m of [...(built.host_permissions ?? []), ...(built.optional_host_permissions ?? [])]) local("host_permission", "the host permission", m);
   for (const f of files("dist-ext")) if (TEST_FILE.test(f)) fail(`the release build ships the test file dist-ext/${f}`);
+  // AR-U2: no reason for a use that the release build does not have.
   for (const [pattern, uses] of Object.entries(reasons)) for (const use of Object.keys(uses ?? {})) if (!allowed.includes(`${pattern} ${use}`)) fail(`local_hosts["${pattern}"].${use} has a reason, but the release build has no such ${use}`);
   return allowed;
 }
