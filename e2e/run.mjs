@@ -12,6 +12,7 @@ const SECRETS = [PASSWORD, EMAIL, CODE];
 const record = { startedAt: new Date().toISOString(), checks: [] };
 const check = (name, expected, actual) => record.checks.push({ name, expected, actual, ok: JSON.stringify(actual) === JSON.stringify(expected) });
 const kinds = (result) => result.walls.map((w) => `${w.kind}${w.selector ? ` ${w.selector}` : ""}`);
+const banner = (page) => page.evaluate(() => document.getElementById("foxpass-banner")?.shadowRoot?.textContent ?? null);
 const leaks = (value) => SECRETS.filter((s) => JSON.stringify(value).includes(s));
 
 // The demo has no host access in the release build. The E2E build adds
@@ -92,12 +93,11 @@ try {
   let runs = 0;
   const handoff = async (path, options = {}) => {
     const id = `run-${++runs}`;
-    await send({ type: "handoff", id, tabId: await tabOf(path), pollMs: 200, ...options });
+    await send({ type: "handoff", id, tabId: await tabOf(path), ...options });
     return id;
   };
   const resultOf = (id, timeoutMs = 20000) => poll(ext, (i) => browser.runtime.sendMessage({ type: "handoff-result", id: i }), id, timeoutMs);
   const eventsOf = async (id) => (await send({ type: "events" })).filter((e) => e.run === id);
-  const banner = (page) => page.evaluate(() => document.getElementById("foxpass-banner")?.shadowRoot?.textContent ?? null);
   const activeUrl = () => ext.evaluate(async () => (await browser.tabs.query({ active: true, lastFocusedWindow: true }))[0]?.url);
 
   // H12: no wall, no pause.
@@ -107,7 +107,8 @@ try {
 
   // H3, H4, H14, and the notify hook: password, then OTP, then the account page.
   const flow = await fox.open(`${base}/login.html?h=3`);
-  await ext.bringToFront();
+  // Put the extension page in front, so the handoff must bring the wall tab back.
+  await ext.evaluate(async () => browser.tabs.update((await browser.tabs.getCurrent()).id, { active: true }));
   const flowRun = await handoff("login.html?h=3");
   check("H3 the wall tab comes to the front", `${base}/login.html?h=3`, await poll(ext, async (u) => ((await browser.tabs.query({ active: true, lastFocusedWindow: true }))[0]?.url === u ? u : null), `${base}/login.html?h=3`).catch(() => activeUrl()));
   check("H3 the banner tells the user what to do", true, (await poll(flow, () => document.getElementById("foxpass-banner")?.shadowRoot?.textContent ?? null)).includes("password"));
@@ -124,7 +125,7 @@ try {
   const flowResult = await resultOf(flowRun);
   check("H3 signed in when the account page has no wall", { status: "signed-in", signal: "url-changed", host: "localhost" }, flowResult);
   const flowEvents = await eventsOf(flowRun);
-  check("H4 the events show the steps in order", ["paused", "wall-changed", "resumed"], flowEvents.map((e) => e.type).filter((t) => t !== "notice"));
+  check("H4 the events show the steps in order", ["paused", "wall-changed", "resumed", "ended"], flowEvents.map((e) => e.type).filter((t) => t !== "notice"));
   check("H14 no event holds a typed value", [], leaks(flowEvents));
   check("notify hook got one notice for the password step", [{ kind: "password", host: "localhost" }], flowEvents.filter((e) => e.type === "notice").map((e) => ({ kind: e.kind, host: e.host })));
   await flow.close();
@@ -176,7 +177,7 @@ try {
   const blank = await fox.open(`data:text/html,<h1>No access</h1>`);
   const blankTab = await poll(ext, async () => (await browser.tabs.query({})).find((t) => t.url?.startsWith("data:"))?.id);
   const blankRun = `run-${++runs}`;
-  await send({ type: "handoff", id: blankRun, tabId: blankTab, pollMs: 200, timeoutMs: 1500, walls: [{ kind: "password", reason: "given by the test", selector: "#password", host: "localhost" }] });
+  await send({ type: "handoff", id: blankRun, tabId: blankTab, timeoutMs: 1500, walls: [{ kind: "password", reason: "given by the test", selector: "#password", host: "localhost" }] });
   check("H13 a banner that cannot go in does not stop the handoff", { status: "timeout" }, await resultOf(blankRun));
   const blankEvents = (await eventsOf(blankRun)).map((e) => e.type);
   check("H13 highlight-failed and H10 scan-failed are events", [true, true], [blankEvents.includes("highlight-failed"), blankEvents.includes("scan-failed")]);

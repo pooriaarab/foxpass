@@ -13,7 +13,7 @@
       }
     }
   },
-  "permissions": ["storage", "scripting", "webNavigation"],
+  "permissions": ["storage", "scripting", "webNavigation", "cookies"],
   "optional_host_permissions": ["http://*/*", "https://*/*"],
   "background": {
     "scripts": ["background.js"]
