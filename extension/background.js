@@ -15,7 +15,15 @@ let notifyThrows = false;
 const handoff = createHandoff({
   browser,
   pollMs: 250,
-  onEvent: (event) => events.push({ run: runOfTab.get(event.tabId), ...event }),
+  onEvent: (event) => {
+    events.push({ run: runOfTab.get(event.tabId), ...event });
+    // The toolbar badge shows that the agent waits for the user.
+    if (event.type === "paused" || event.type === "wall-changed") {
+      browser.action.setBadgeText({ tabId: event.tabId, text: "!" });
+      browser.action.setBadgeBackgroundColor({ tabId: event.tabId, color: "#ff9500" });
+    }
+    if (event.type === "ended") browser.action.setBadgeText({ tabId: event.tabId, text: "" }).catch(() => undefined);
+  },
   // A stand-in for foxnotify: keep the notice so the popup can show it.
   onNeedsUser: (notice) => {
     if (notifyThrows) throw new Error("notify is down");
@@ -58,11 +66,38 @@ function agentState(id) {
   const waiting = latest && latest.type !== "ended" ? latest.walls[0].kind : null;
   return { events: run.events, status: run.status, summary: run.summary, waiting };
 }
-const toolFor = (tabId) => handoffTool({ handoff, browser, tabId: () => tabId });
+// The popup: one agent run for each tab, started with Run.
+const latest = new Map();
+let popupRuns = 0;
+function stepLine(event) {
+  if (event.type === "tool-call") return `Calls ${event.name}`;
+  if (event.type === "tool-result") return `${event.name}: ${event.summary}`;
+  if (event.type === "done") return `Done: ${event.summary}`;
+  if (event.type === "blocked") return `Stopped: ${event.reason}`;
+  if (event.type === "aborted") return "Stopped by you";
+  return null;
+}
+async function popupState(tabId) {
+  const tab = await browser.tabs.get(tabId);
+  const origin = `${new URL(tab.url).protocol}//${new URL(tab.url).hostname}/*`;
+  const permitted = await browser.permissions.contains({ origins: [origin] });
+  const state = latest.has(tabId) ? agentState(latest.get(tabId)) : null;
+  return {
+    host: new URL(tab.url).host,
+    permitted,
+    status: state?.status ?? null,
+    summary: state?.summary ?? "",
+    waiting: state?.waiting ?? null,
+    steps: (state?.events ?? []).map(stepLine).filter(Boolean).slice(-8),
+  };
+}
+function runFromPopup(tabId) {
+  const id = `popup-${++popupRuns}`;
+  latest.set(tabId, id);
+  return startAgent({ id, tabId });
+}
 
-browser.runtime.onInstalled.addListener(() => {
-  browser.storage.local.set({ fixture: "installed" });
-});
+const toolFor = (tabId) => handoffTool({ handoff, browser, tabId: () => tabId });
 
 browser.runtime.onMessage.addListener(async (message) => {
   if (message?.type === "ready") return ready.then(() => true);
@@ -73,6 +108,9 @@ browser.runtime.onMessage.addListener(async (message) => {
   if (message?.type === "cancel") return controllers.get(message.id)?.abort() ?? true;
   if (message?.type === "events") return events;
   if (message?.type === "agent") return startAgent(message);
+  if (message?.type === "popup-state") return popupState(message.tabId);
+  if (message?.type === "run") return runFromPopup(message.tabId);
+  if (message?.type === "stop") return agents.get(latest.get(message.tabId))?.controller.abort() ?? true;
   if (message?.type === "agent-state") return agentState(message.id);
   if (message?.type === "agent-planner") return agents.get(message.id)?.seen ?? null;
   if (message?.type === "agent-cancel") return agents.get(message.id)?.controller.abort() ?? true;
