@@ -9,7 +9,7 @@ export function showBanner(selector: string | null, message: string): boolean {
   const root = host.attachShadow({ mode: "open" });
   const box = document.createElement("div");
   box.setAttribute("role", "alert");
-  box.style.cssText = "position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:2147483647;max-width:min(36rem,90vw);padding:12px 16px;border-radius:10px;background:#20123a;color:#fff;font:15px/1.4 system-ui,sans-serif;box-shadow:0 4px 18px #0006;border:2px solid #ff9500";
+  box.style.cssText = "position:fixed;top:12px;right:12px;z-index:2147483647;max-width:min(24rem,90vw);padding:12px 16px;border-radius:10px;background:#20123a;color:#fff;font:15px/1.4 system-ui,sans-serif;box-shadow:0 4px 18px #0006;border:2px solid #ff9500";
   const title = document.createElement("strong");
   title.textContent = "The agent paused. Your turn.";
   const text = document.createElement("div");

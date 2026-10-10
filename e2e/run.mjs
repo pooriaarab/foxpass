@@ -13,6 +13,7 @@ const record = { startedAt: new Date().toISOString(), checks: [] };
 const check = (name, expected, actual) => record.checks.push({ name, expected, actual, ok: JSON.stringify(actual) === JSON.stringify(expected) });
 const kinds = (result) => result.walls.map((w) => `${w.kind}${w.selector ? ` ${w.selector}` : ""}`);
 const banner = (page) => page.evaluate(() => document.getElementById("foxpass-banner")?.shadowRoot?.textContent ?? null);
+const until = (page, text) => poll(page, (t) => (document.body.innerText.includes(t) ? document.body.innerText : null), text);
 const leaks = (value) => SECRETS.filter((s) => JSON.stringify(value).includes(s));
 
 // The demo has no host access in the release build. The E2E build adds
@@ -238,7 +239,6 @@ try {
   const site2 = await fox.open(`${base}/login.html?d=1`);
   const popup = await fox.openExtensionPage("popup.html");
   const popupText = () => popup.evaluate(() => document.body.innerText);
-  const until = (page, text) => poll(page, (t) => (document.body.innerText.includes(t) ? document.body.innerText : null), text);
   await until(popup, "localhost");
   check("D3 a site with access shows Run, not Allow", [false, true], await popup.evaluate(() => [!document.getElementById("allow").hidden, !document.getElementById("run").hidden]));
   await popup.evaluate(() => document.getElementById("run").click());
@@ -265,12 +265,14 @@ try {
   if (process.argv.includes("--shots")) record.popupDone = await popup.evaluate(() => browser.runtime.sendMessage({ type: "popup-state", tabId: Number(document.body.dataset.tab) }));
   await site2.close();
   // D3: a tab on a host with no access. The E2E build has access to localhost and 127.0.0.1 only.
-  const noAccess = await fox.open(`data:text/html,<title>x</title><h1>No access</h1>`);
-  await popup.reload();
-  await poll(popup, () => document.body.dataset.tab || null);
-  check("D3 a site without access shows Allow, not Run", [true, false], await popup.evaluate(() => [!document.getElementById("allow").hidden, !document.getElementById("run").hidden]));
-  await noAccess.close();
+  // [::1] is not in the E2E host list, and nothing listens there: the tab shows an error page with an http address.
+  await fox.open(`${site.url.replace("127.0.0.1", "[::1]")}/plain.html`).catch(() => null);
   await popup.close();
+  const popup2 = await fox.openExtensionPage("popup.html");
+  await poll(popup2, () => document.body.dataset.tab || null);
+  check("D3 a site without access shows Allow, not Run", [true, false], await popup2.evaluate(() => [!document.getElementById("allow").hidden, !document.getElementById("run").hidden]));
+  for (const page of await fox.browser.pages()) if (page.url().includes("[::1]")) await page.close();
+  await popup2.close();
 } catch (error) {
   record.error = error instanceof Error ? error.message : String(error);
 } finally {

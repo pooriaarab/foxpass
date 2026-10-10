@@ -32,7 +32,8 @@
     "check:amo": "node scripts/amo-listing.mjs check",
     "build:ext": "node scripts/build-ext.mjs",
     "lint:ext": "web-ext lint -s dist-ext --warnings-as-errors",
-    "e2e": "node scripts/build-ext.mjs --e2e && node e2e/run.mjs"
+    "e2e": "node scripts/build-ext.mjs --e2e && node e2e/run.mjs",
+    "site": "node scripts/site.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.19.1",
