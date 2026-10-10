@@ -23,6 +23,9 @@ importers:
       foxloop:
         specifier: ^0.1.2
         version: 0.1.2
+      foxvault:
+        specifier: ^0.1.2
+        version: 0.1.2
       oxlint:
         specifier: ^1.87.0
         version: 1.87.0
@@ -1172,6 +1175,10 @@ packages:
 
   foxpaw@0.1.0:
     resolution: {integrity: sha512-kYYNAOjK60ExTND4JNGkScfXAvY3Uq0KrYuqRfP2gbbjmgX6FMhwrnFRDVWrZWR81gMZKolcdGxxSKvN3guUbw==}
+    engines: {node: '>=24'}
+
+  foxvault@0.1.2:
+    resolution: {integrity: sha512-X8OjpwPk/Q866MX9gE31k0FSdC3KQSMwEVhDpdaItNUhwKdzGBJvhxViPP8HPr9i99tqHDmInTzd+ezo0ABlEQ==}
     engines: {node: '>=24'}
 
   fs-extra@11.4.1:
@@ -3013,6 +3020,10 @@ snapshots:
       foxpaw: 0.1.0
 
   foxpaw@0.1.0: {}
+
+  foxvault@0.1.2:
+    dependencies:
+      foxgate: 0.1.2
 
   fs-extra@11.4.1:
     dependencies:
