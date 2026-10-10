@@ -68,8 +68,11 @@ docs/failure-modes.md  every way the code can fail, written before the code
 .github/          CI, release, PR and issue standards
 extension/        the extension that shows this repo working in Firefox
 scripts/build-ext.mjs  bundles extension/ into dist-ext/ (release) or, with --e2e, dist-e2e/
+src/page/         functions that run in the page; each must be self-contained
+demo/site/        the sample bank site that the demo and the E2E tests use (pnpm site)
+demo/agent.js     the demo agent: foxloop with a rule planner
 e2e/run.mjs       the Firefox E2E test on dist-e2e/; writes artifacts/e2e-<date>.json
-e2e/extension/    E2E-only extension parts; never in dist-ext/
+e2e/passkey.mjs   the passkey E2E test over Marionette, with a virtual authenticator
 ```
 
 ## Commands
@@ -79,7 +82,8 @@ pnpm install
 pnpm ci:local   # lint + typecheck + test + build; run before every hand-off
 pnpm build:ext  # extension/ -> dist-ext/; fails if the manifest and package.json versions differ
 pnpm lint:ext   # web-ext lint on dist-ext/ (part of ci:local)
-pnpm e2e        # builds dist-e2e/, then Firefox E2E; set FIREFOX if Firefox is not in the usual place
+pnpm e2e        # builds dist-e2e/, then both Firefox E2E tests; set FIREFOX if Firefox is not in the usual place
+pnpm site       # serves demo/site/ on http://localhost:8790
 ```
 
 ## Testing
