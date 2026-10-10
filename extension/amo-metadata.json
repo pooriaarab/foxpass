@@ -2,10 +2,10 @@
   "default_locale": "en-US",
   "slug": "foxpass",
   "name": {
-    "en-US": "foxpass"
+    "en-US": "foxpass — the agent pauses, you sign in"
   },
   "summary": {
-    "en-US": "Hand logins and passkeys to the user, not the AI agent: the agent pauses, you sign in, the agent goes on."
+    "en-US": "An AI agent in your browser stops at a password, a code, a passkey, a CAPTCHA, or a consent screen. You do that step. The agent never sees what you type, and it goes on when you finish."
   },
   "description": {
     "en-US": "foxpass is the reference add-on for the foxpass library. It shows how an AI agent can stop at a sign-in step and let you do it.\n\n**Who it is for:** developers who build browser agents, and want the agent to pause at a password, a code, a passkey, a CAPTCHA, or an OAuth consent screen instead of typing secrets.\n\n**What it does**\n\n- Runs a small agent with fixed rules (no AI model) on the tab you were on. Its goal is to read a balance on a sample bank site.\n- Finds the sign-in step on the page and says why: a password field, a one-time code field, a passkey request, a CAPTCHA, or a consent screen.\n- Brings the tab to the front, outlines the field, and shows what to do. The toolbar button shows a badge while the agent waits.\n- Goes on when you finish: when the page leaves the sign-in page, the form goes away, or the step ends.\n- Never gives the agent your password or code. Those values show as [redacted] in what the agent reads.\n\n**Try it:** run the sample site from the foxpass repository with `pnpm site`, open http://localhost:8790/login.html, and click Run in the popup.\n\n**What leaves your computer:** nothing. The add-on has no server and no analytics. The agent has fixed rules and sends page text nowhere.\n\n**Permissions**\n\n- Access to a site, only when you click Allow for it: read the sign-in step and show the banner there.\n- Active tab: see the address of the tab when you open the popup.\n- Scripting and web navigation: read the page and show the banner.\n- Cookies: notice the sign-in cookie that a site sets.\n\nThe source code is MIT licensed."
@@ -23,6 +23,6 @@
   },
   "version": {
     "license": "MIT",
-    "approval_notes": "The uploaded source.zip is the git tree of this release. To build: install Node 24 and pnpm (corepack enable), run `pnpm install --frozen-lockfile`, then `pnpm build:ext`. The output is dist-ext/. esbuild bundles extension/*.js; the other files are copied unmodified. To try it: run `pnpm site` in the source tree, which serves a test bank site on http://localhost:8790. Open http://localhost:8790/login.html, open the popup, click Allow, then Run. The agent pauses at the password step. Sign in with ada@example.com and the password correct horse, then enter the code 424242. The popup shows the balance. No account is needed. observer.js is a MAIN world content script that only records WebAuthn calls; it passes each call to Firefox unchanged."
+    "approval_notes": "The uploaded source.zip is the git tree of this release. To build: install Node 24 and pnpm (corepack enable), run `pnpm install --frozen-lockfile`, then `pnpm build:ext`. The output is dist-ext/. esbuild bundles extension/*.js; the other files are copied unmodified. To try it: run `pnpm site` in the source tree, which serves a sample bank site on http://localhost:8790. Open http://localhost:8790/login.html, open the popup, click Allow, then Run. The agent pauses at the password step. Sign in with ada@example.com and the password correct horse, then enter the code 424242. The popup shows the balance. No account is needed. observer.js is a MAIN world content script that only records WebAuthn calls; it passes each call to Firefox unchanged."
   }
 }
