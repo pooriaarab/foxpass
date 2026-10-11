@@ -7,20 +7,20 @@
   </head>
   <body>
     <header>
-      <img src="icons/icon-48.png" alt="" width="28" height="28" />
+      <img class="mark" src="icons/icon-48.png" alt="" width="22" height="22" />
       <div>
         <h1>foxpass</h1>
         <p class="sub">The agent pauses at a sign-in. You sign in. The agent goes on.</p>
       </div>
     </header>
-    <section>
+    <section class="card">
       <p class="label">This tab</p>
       <p id="site" class="site">No web page in this window.</p>
-      <button id="allow" type="button" hidden>Allow foxpass on this site</button>
-      <button id="run" type="button" hidden>Run the agent here</button>
+      <button id="allow" class="primary" type="button" hidden>Allow foxpass on this site</button>
+      <button id="run" class="primary" type="button" hidden>Run the agent here</button>
       <button id="stop" type="button" class="quiet" hidden>Stop</button>
     </section>
-    <section>
+    <section class="card">
       <p class="label">Agent</p>
       <p id="status" class="status" data-state="idle">Not started. The agent's goal: read your Acorn Bank balance.</p>
       <ol id="steps"></ol>
