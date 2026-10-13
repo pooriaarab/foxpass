@@ -1,4 +1,4 @@
-// Tests for docs/failure-modes.md C1-C18. Written before src/classify.ts.
+// Tests for docs/failure-modes.md C1-C19. Written before src/classify.ts.
 import { describe, expect, it } from "vitest";
 import { classify, FoxpassError, type FieldInfo, type PageScan } from "../src/index.js";
 
@@ -70,6 +70,21 @@ describe("OTP walls", () => {
   it("C6 ignores three one-character boxes", () => {
     const boxes = [1, 2, 3].map((n) => field({ selector: `#d${n}`, maxLength: 1 }));
     expect(classify(scan({ fields: boxes }))).toEqual([]);
+  });
+  it("C19 reads an unmarked Security code field in a card form as part of the card, not an OTP", () => {
+    const card = field({ selector: "#num", label: "Card number", inputMode: "numeric", maxLength: 19 });
+    for (const code of [{ label: "Security code" }, { name: "cvc", label: "CVC code" }, { id: "cvv", placeholder: "Card code" }]) {
+      expect(kinds(scan({ fields: [card, field({ selector: "#csc", maxLength: 4, inputMode: "numeric", ...code })] }))).toEqual([]);
+    }
+    const marked = field({ selector: "#num", autocomplete: "cc-number", label: "Number" });
+    expect(kinds(scan({ fields: [marked, field({ selector: "#csc", label: "Security code", maxLength: 3 })] }))).toEqual([]);
+  });
+  it("C19 still finds an OTP next to a card field when the field says so, and a security code with no card field", () => {
+    const card = field({ selector: "#num", label: "Card number", maxLength: 19 });
+    expect(kinds(scan({ fields: [card, field({ selector: "#otp", label: "Security code", autocomplete: "one-time-code" })] }))).toEqual(["otp"]);
+    expect(kinds(scan({ fields: [card, field({ selector: "#otp", label: "SMS verification code", maxLength: 6, inputMode: "numeric" })] }))).toEqual(["otp"]);
+    expect(kinds(scan({ fields: [field({ selector: "#otp", label: "Security code", maxLength: 6, inputMode: "numeric" })] }))).toEqual(["otp"]);
+    expect(kinds(scan({ fields: [{ ...card, form: 1 }, field({ selector: "#otp", label: "Security code", maxLength: 6 })] }))).toEqual(["otp"]);
   });
   it("C7 ignores coupon, promo, gift, and postal code fields", () => {
     for (const name of ["coupon_code", "promo-code", "giftcode", "postal_code", "zip code", "discount code"]) {
