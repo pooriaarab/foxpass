@@ -85,6 +85,8 @@ describe("OTP walls", () => {
     expect(kinds(scan({ fields: [card, field({ selector: "#otp", label: "SMS verification code", maxLength: 6, inputMode: "numeric" })] }))).toEqual(["otp"]);
     expect(kinds(scan({ fields: [field({ selector: "#otp", label: "Security code", maxLength: 6, inputMode: "numeric" })] }))).toEqual(["otp"]);
     expect(kinds(scan({ fields: [{ ...card, form: 1 }, field({ selector: "#otp", label: "Security code", maxLength: 6 })] }))).toEqual(["otp"]);
+    // A field in no form (form -1) is not in a card form: fields outside any form share no group (fails closed).
+    expect(kinds(scan({ fields: [{ ...card, form: -1 }, field({ selector: "#otp", label: "Security code", maxLength: 6, form: -1 })] }))).toEqual(["otp"]);
   });
   it("C7 ignores coupon, promo, gift, and postal code fields", () => {
     for (const name of ["coupon_code", "promo-code", "giftcode", "postal_code", "zip code", "discount code"]) {
