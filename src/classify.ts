@@ -1,5 +1,5 @@
 // Name each auth wall on a page scan, with a reason. Pure: no browser API.
-// The rules follow docs/failure-modes.md C1-C18.
+// The rules follow docs/failure-modes.md C1-C19.
 import { FoxpassError } from "./errors.js";
 import type { FieldInfo, PageScan, Wall, WallKind } from "./types.js";
 
@@ -9,6 +9,10 @@ const ORDER: WallKind[] = ["webauthn", "captcha", "oauth-consent", "otp", "passw
 export const CODE_WORDS = /\b(otp|one time|2fa|two factor|mfa|totp|passcode|verification|verify|security code|auth code|authentication code|sms code|code)\b/;
 /** Words that name a code field that is not a one-time code. */
 export const NOT_OTP = /coupon|promo|gift|postal|post code|postcode|zip|discount|voucher|referral|country|area code|invite/;
+/** Words that name a card code (C19). In a card form, such a field is part of the card, not a one-time code. */
+const CARD_CODE = /\b(security code|cvc|cvv|cvv2|csc|card code|card verification)\b/;
+/** Words that name a card number field (C19). */
+const CARD_NUMBER = /\b(card number|card no|cc number|credit card|debit card)\b/;
 const IDENTIFIER = /\b(user|username|login|email|e mail|identifier|account|phone)\b/;
 const SIGN_IN_BUTTON = /\b(sign in|log in|login|next)\b/;
 const SIGN_IN_HEADING = /\b(sign in|log in|login)\b/;
@@ -122,8 +126,11 @@ export function classify(scan: PageScan): Wall[] {
     for (const b of boxes) used.add(b);
     walled.add(form);
   }
+  // C19: a form with a card number field; its card code field is not a one-time code.
+  const cardForms = new Set(visible.filter((f) => f.autocomplete.toLowerCase().split(/\s+/).includes("cc-number") || CARD_NUMBER.test(describe(f))).map((f) => f.form));
+  const cardCode = (f: FieldInfo) => cardForms.has(f.form) && CARD_CODE.test(describe(f)) && !f.autocomplete.toLowerCase().split(/\s+/).includes("one-time-code");
   for (const f of visible) {
-    if (used.has(f)) continue;
+    if (used.has(f) || cardCode(f)) continue;
     const reason = otpReason(f);
     if (reason === undefined) continue;
     add("otp", reason, f.selector);
