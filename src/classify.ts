@@ -127,7 +127,8 @@ export function classify(scan: PageScan): Wall[] {
     walled.add(form);
   }
   // C19: a form with a card number field; its card code field is not a one-time code.
-  const cardForms = new Set(visible.filter((f) => f.autocomplete.toLowerCase().split(/\s+/).includes("cc-number") || CARD_NUMBER.test(describe(f))).map((f) => f.form));
+  // A field in no form (form -1) is in no card form: fields outside any form are not one group.
+  const cardForms = new Set(visible.filter((f) => f.form !== -1 && (f.autocomplete.toLowerCase().split(/\s+/).includes("cc-number") || CARD_NUMBER.test(describe(f)))).map((f) => f.form));
   const cardCode = (f: FieldInfo) => cardForms.has(f.form) && CARD_CODE.test(describe(f)) && !f.autocomplete.toLowerCase().split(/\s+/).includes("one-time-code");
   for (const f of visible) {
     if (used.has(f) || cardCode(f)) continue;
