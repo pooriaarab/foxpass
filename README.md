@@ -1,30 +1,31 @@
 # foxpass
 
-<p align="center">Hand logins and passkeys to the user, not the AI agent: the agent pauses, you sign in, the agent goes on.</p>
+[![npm version](https://img.shields.io/npm/v/foxpass)](https://www.npmjs.com/package/foxpass)
+[![Downloads/month](https://img.shields.io/npm/dm/foxpass)](https://www.npmjs.com/package/foxpass)
+[![MIT license](https://img.shields.io/npm/l/foxpass)](https://opensource.org/license/mit)
+![Zero runtime dependencies](https://img.shields.io/badge/runtime_dependencies-0-blue)
+![Types included](https://img.shields.io/badge/types-included-blue)
 
-<p align="center">
-  <a href="https://github.com/pooriaarab/foxpass/actions"><img src="https://github.com/pooriaarab/foxpass/actions/workflows/ci.yml/badge.svg" alt="CI"/></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License MIT"/></a>
-</p>
+[Setup](#install) · [API reference](#runtime-surfaces) · [Comparisons](#compare) · [Source](https://github.com/pooriaarab/foxpass)
 
-foxpass is for browser agents in Firefox. When the agent's task reaches a
-sign-in step, foxpass names it: a password field, a one-time code (OTP), a
-sign-in form, a passkey (WebAuthn) request, a CAPTCHA, or an OAuth consent
-screen. It pauses the agent, brings the tab to the front, outlines the field,
-and tells the user what to do. When the user is signed in, the agent goes on.
-
-foxpass is a handoff, not an autofiller. A Firefox extension cannot read the
-passwords that Firefox saves, and it cannot do a passkey ceremony for the
-user. foxpass does not try. The agent never gets a typed password, a code,
-or a passkey result: what the agent reads shows those values as `[redacted]`.
+foxpass is an open-source authentication handoff library for Firefox browser agents.
+It detects sign-in steps, asks the user to complete them, and checks when the agent can resume.
+Its page readers redact recognized secret fields before returning snapshots.
 
 ## Install
 
 ```bash
-npm i foxpass
+npm install foxpass
 ```
 
-## Example
+Node.js 24 or later is required for the examples and development tools.
+The package includes TypeScript declarations and has zero runtime dependencies.
+Browser operations run inside your Firefox extension with the required permissions.
+
+## Redact your first snapshot
+
+Save the following example as `quickstart.mjs`, then run `node quickstart.mjs`.
+No credentials, environment variables, or `.env` file are required.
 
 This part runs in Node 24 or later as written. It needs no browser.
 
@@ -84,75 +85,88 @@ await host.addGrant({ scope: "read", domains: ["bank.example"] });
 for await (const event of createLoop({ mind, gate, tools }).run("Read my balance.")) console.log(event.type);
 ```
 
-## Use cases
-
-| Who | What they build | How foxpass helps |
-|---|---|---|
-| A browser agent author (for example foxmate) | An agent that does tasks on sites where the user has an account | The agent stops at the sign-in step instead of failing or asking for the password. The user signs in, and the run goes on. |
-| A developer on any agent framework | A tool loop that reads pages and fills forms | `redactSnapshot` takes the password, code, and card values out of any page snapshot before it goes to the model or a log. |
-| An automation or QA engineer | Scripts that run on staging sites with 2FA | The script hands the OTP or passkey step to the person at the keyboard, and goes on when the page shows the account. |
-| A notification app author (for example foxnotify) | Alerts on the desktop or the phone when an agent waits | The `onNeedsUser` hook gets the step kind, the host, and the words to show. foxpass does not depend on the app. |
-| A password manager author | A fill button that an agent can ask for | `fillWall` fills a foxvault secret only into a field that the scan found as a sign-in step, after the user approves the exact host and field. |
-| A security reviewer | A check that an agent never saw a secret | The scan and the snapshot never hold typed values. The E2E test looks for the typed password and code in every planner message. |
-
 ## How it works
 
-```mermaid
-flowchart TD
-  A[Agent reads the tab] --> S[scanTab: fields, buttons, frames, passkey calls; no values]
-  S --> C{classify}
-  C -- no wall --> G[Agent goes on]
-  C -- password, OTP, sign-in, passkey, CAPTCHA, consent --> H[hand_to_user]
-  H --> F[Tab to the front, banner, outlined field]
-  F --> N[onNeedsUser hook, for example foxnotify]
-  F --> W{Wait}
-  W -- new page with a new wall --> F
-  W -- URL leaves the wall page, form gone, cookie, or your check --> R[signed-in]
-  W -- timeout, tab closed, run stopped --> X[failed result: the agent stops]
-  R --> G
+```text
+Firefox tab -> scanTab -> classify -> hand_to_user -> user signs in
+                                ^                         |
+                                +--- poll for completion -+
+Firefox tab -> readTab -> redactSnapshot -> agent page reader
 ```
 
-1. `scanTab` runs a bundled function in the top document of the tab. It reads
-   each field's type, `autocomplete`, name, label, and size, and if it is
-   empty. It never reads a value.
-2. `observeWebAuthn` runs in the page world at `document_start`. It wraps
-   `navigator.credentials.get` and `create`, calls the real function with the
-   same arguments, and returns the same promise. It records the kind, the RP
-   ID, and the end state, never the result.
-3. `classify` names each wall with a reason, for example
-   `autocomplete=one-time-code` or `a pending passkey request (RP ID bank.example)`.
-4. `createHandoff().toUser()` shows a banner, outlines the field, and checks
-   the tab every 500 ms. Two scans in a row must agree before it says
-   `signed-in`, so a page that still draws its form does not count.
-5. `readTab` masks secret values in the page, so they never leave it, and
-   runs `redactSnapshot` again on the result.
+The classifier has six wall categories: passkey, CAPTCHA, OAuth consent, one-time code, password, and sign-in.
+The observer records Web Authentication (WebAuthn) call state, without the credential result.
+URL and form completion signals require two agreeing scans.
+Cookie and custom checks can complete a handoff directly.
 
-```mermaid
-sequenceDiagram
-  participant P as Planner (foxloop)
-  participant T as hand_to_user
-  participant B as Tab
-  participant U as User
-  P->>T: hand_to_user({ reason })
-  T->>B: front, banner, outline the field
-  B-->>U: "Type your password in the outlined field"
-  U->>B: password, then the code
-  T->>B: scan: OTP page is a new wall
-  T->>B: banner moves to the code field
-  U->>B: code
-  B-->>T: account page, no wall
-  T-->>P: ok: "The user finished the sign-in step"
-  P->>B: read_page (values show as [redacted])
-```
+## Why it exists
 
-Every failure mode has a test: see [docs/failure-modes.md](docs/failure-modes.md).
+A browser agent can reach a password, one-time password (OTP), or passkey step that needs a person.
+foxpass provides that handoff inside a Firefox extension.
+Playwright and Selenium provide browser automation APIs; your application still chooses its authentication workflow.
 
-## API
+## Compare
+
+Scope checked on 2026-10-14 against the linked official documentation.
+
+| Scope | foxpass | [Playwright](https://playwright.dev/docs/auth) | [Selenium](https://www.selenium.dev/documentation/webdriver/) |
+|---|---|---|---|
+| Main role | Authentication handoff and redaction | Browser testing and automation | WebDriver browser automation |
+| Execution | Your Firefox extension | Your browser automation process | Your WebDriver session |
+| Configuration | JavaScript library calls | Test fixtures and browser contexts | Driver and language bindings |
+| Authentication path | User handoff and completion checks | Reusable authentication state | Application-defined browser steps |
+
+## Coverage
+
+| Surface or integration | Status | Behavior |
+|---|---|---|
+| Firefox WebExtensions | Implemented | Scan, snapshot, banner, tab focus, and polling |
+| WebAuthn passkeys | Detection only | Observe pending nonconditional requests; user completes the ceremony |
+| Password, OTP, sign-in fields | Heuristic detection | Classify visible fields and form hints |
+| OAuth consent | Heuristic detection | Authorization path and `client_id` query |
+| Google reCAPTCHA | Detection only | Frame URL or widget class |
+| hCaptcha | Detection only | Frame URL or widget class |
+| Cloudflare Turnstile | Detection only | Frame URL or widget class |
+| Arkose Labs / FunCaptcha | Detection only | Frame URL |
+| foxloop | Implemented | `read_page` and `hand_to_user` tool shapes |
+| foxvault | Implemented | Delegate approved filling through `fillWall` |
+| foxpaw snapshots | Implemented | Redact `controls` as well as `fields` |
+
+Source inventory: six wall categories, four named CAPTCHA patterns, and two agent tools.
+These are code-backed paths, with local tests for detection and handoff behavior.
+No provider credential checks or live CAPTCHA-provider verification were performed for this rewrite.
+There are no scaffolded provider adapters in this inventory.
+
+## Common use cases
+
+1. Firefox agent authors: pause a foxloop run when a site requires a password or passkey.
+2. QA engineers: hand an OTP step to a person during a Firefox staging-site test.
+3. Agent tool authors: redact foxpaw snapshots before passing page content to a planner.
+4. Password-manager authors: route a foxvault fill request through a detected field and its document identifier.
+5. Notification authors: connect `onNeedsUser` to their own notification handler.
+
+## Features
+
+- **Wall classification:** six categories with reasons and optional field selectors.
+- **User handoff:** banner, field outline, tab focus, timeout, and cancellation.
+- **Completion checks:** URL change, form removal, cookie change, or a custom check.
+- **Snapshot redaction:** password, OTP, card-number, and card-code field handling.
+- **Agent tools:** `read_page` and `hand_to_user`, both with read scope.
+- **Optional fill:** `fillWall` delegates to a supplied foxvault-compatible vault.
+
+## Runtime surfaces
+
+foxpass exports a JavaScript library with TypeScript types.
+Pure classification and redaction run in Node.js; tab operations require Firefox WebExtension APIs.
+It has no command-line interface or Model Context Protocol (MCP) server.
+Its two agent tools are `read_page` and `hand_to_user`.
+
+### API
 
 foxpass is a library. It has no CLI and no MCP server: every part needs a
 live tab in Firefox, and the user at that tab.
 
-### Classify and read
+#### Classify and read
 
 | Export | What it does |
 |---|---|
@@ -164,7 +178,7 @@ live tab in Firefox, and the user at that tab.
 | `scanPage()`, `observeWebAuthn()` | The page functions. Bundle `observeWebAuthn` into the file that `registerWebAuthnObserver` names. |
 | `registerWebAuthnObserver(browser, { js, matches? })` | Registers `js` as a `MAIN` world content script at `document_start`. Default matches: `http://*/*` and `https://*/*`. |
 
-### Hand off
+#### Hand off
 
 `createHandoff(options)` returns `{ toUser(request), waiting() }`.
 
@@ -223,7 +237,7 @@ Open `http://localhost:8790/login.html`, open the foxpass popup, click
 here**. Sign in with `ada@example.com` and the password `correct horse`, then
 type the code `424242`. The popup shows the balance.
 
-### Tests
+#### Tests
 
 ```bash
 pnpm ci:local    # lint, typecheck, unit tests, build, web-ext lint, AMO listing check
@@ -237,26 +251,7 @@ commands. Firefox first waits for a USB key, so the passkey request stays
 pending. The test then adds a virtual authenticator and a passkey, and clicks
 "Use a passkey".
 
-## Firefox APIs used
-
-| API | MDN | Why |
-|---|---|---|
-| `scripting.executeScript` with `documentIds` (Firefox 153+) | [executeScript](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/scripting/executeScript) | Run the scan, the snapshot, and the banner in one exact document. |
-| `scripting.registerContentScripts` with `world: "MAIN"` (Firefox 128+) | [registerContentScripts](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/scripting/registerContentScripts) | Run the passkey observer in the page world before page scripts. |
-| `scripting.getRegisteredContentScripts`, `updateContentScripts` | [scripting](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/scripting) | Register the observer one time. |
-| `webNavigation.getFrame` | [getFrame](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webNavigation/getFrame) | Get the `documentId` of the top document. |
-| `tabs.get`, `tabs.update`, `windows.update` | [tabs](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/tabs) | Read the tab address and status, and bring the tab and its window to the front. |
-| `cookies.get` | [cookies.get](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/cookies/get) | The cookie sign-in signal. |
-| `CredentialsContainer.get`, `create` | [CredentialsContainer](https://developer.mozilla.org/en-US/docs/Web/API/CredentialsContainer) | Observed only. foxpass passes each call through unchanged. |
-| `Element.checkVisibility`, `getBoundingClientRect` | [checkVisibility](https://developer.mozilla.org/en-US/docs/Web/API/Element/checkVisibility) | Count only visible fields, so a hidden trap field is not a wall. |
-| `Element.attachShadow` | [attachShadow](https://developer.mozilla.org/en-US/docs/Web/API/Element/attachShadow) | Keep the banner style apart from the page style. |
-| `CSS.escape` | [CSS.escape](https://developer.mozilla.org/en-US/docs/Web/API/CSS/escape_static) | Make a selector for each field. |
-| `permissions.request`, `permissions.contains`, `activeTab` | [permissions](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/permissions) | Ask for one site at a time. Demo only. |
-| `tabs.query`, `tabs.reload` | [tabs.query](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/tabs/query) | Find the web tab for the popup. Demo only. |
-| `action.setBadgeText`, `setBadgeBackgroundColor` | [action](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/action) | Show a badge while the agent waits. Demo only. |
-| `runtime.sendMessage`, `runtime.onMessage` | [runtime](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/runtime) | The popup talks to the background page. Demo only. |
-
-## Limits
+## Delivery and behavior limits
 
 - foxpass cannot read the passwords that Firefox saves, and it cannot finish
   a passkey ceremony. The user does both.
@@ -283,29 +278,66 @@ pending. The test then adds a virtual authenticator and a passkey, and clicks
   is there. If Firefox fails the request at once, the test cannot see a
   pending call.
 
-## Part of the fox primitives
+## Integration guides
 
-```mermaid
-flowchart LR
-  foxkit[foxkit] -- template --> foxpass[foxpass]
-  foxgate[foxgate] -. approvals .-> foxpass
-  foxvault[foxvault] -. optional fill .-> foxpass
-  foxpass -- tools --> foxloop[foxloop]
-  foxpass -. onNeedsUser hook .-> foxnotify[foxnotify]
-  foxloop --> foxmate[foxmate]
-  click foxkit "https://github.com/pooriaarab/foxkit"
-  click foxpass "https://github.com/pooriaarab/foxpass"
-  click foxgate "https://github.com/pooriaarab/foxgate"
-  click foxvault "https://github.com/pooriaarab/foxvault"
-  click foxloop "https://github.com/pooriaarab/foxloop"
-  click foxnotify "https://github.com/pooriaarab/foxnotify"
-  click foxmate "https://github.com/pooriaarab/foxmate"
-```
+- [Firefox extension handoff setup](#redact-your-first-snapshot) includes permissions and observer registration.
+- [foxloop agent tools](#agent-tools) describes the two read-scope tools.
+- [foxvault optional fill](#fill-from-foxvault-optional) explains vault delegation.
+- [Firefox demo extension](#demo-extension) gives a local sign-in walkthrough.
 
-foxpass has no runtime dependency. Its tools have the foxloop tool shape,
-`fillWall` takes a foxvault vault, and the vault asks foxgate. The demo uses
-all three from npm. foxnotify can use the `onNeedsUser` hook.
+## Status
+
+Version 0.1.3 is an early release. Public APIs can change during the 0.x series.
+Report problems through [GitHub issues](https://github.com/pooriaarab/foxpass/issues).
+Public case studies are not yet published in this repository.
+
+## FAQ
+
+### What is foxpass?
+
+foxpass is a Firefox authentication handoff library for browser agents.
+It detects sign-in steps and waits while a person completes them.
+
+### Which integrations are verified?
+
+foxpass has source-backed Firefox, foxloop, foxvault, and foxpaw paths.
+This rewrite runs local tests; it does not certify live provider behavior.
+
+### Does foxpass provide a managed authentication service?
+
+foxpass runs in your extension and application.
+You supply the browser, planner, permissions, and task state.
+
+### How is foxpass different from Playwright?
+
+foxpass handles user handoff and snapshot redaction inside a Firefox extension.
+[Playwright authentication](https://playwright.dev/docs/auth) documents reusable browser state for automated tests.
+
+### How is foxpass different from Selenium?
+
+foxpass supplies a sign-in handoff workflow and agent tool shapes.
+[Selenium WebDriver](https://www.selenium.dev/documentation/webdriver/) supplies browser automation through drivers and language bindings.
+
+### Can foxpass solve a CAPTCHA or complete a passkey?
+
+foxpass detects known CAPTCHA hints and pending passkey requests.
+The user completes those steps in the browser.
+
+### Does foxpass hide every possible secret?
+
+foxpass redacts recognized field values and exact copies of secrets with at least four characters.
+Encoded, shortened, or differently cased copies can remain visible.
+
+### Does foxpass resume when the page URL changes?
+
+foxpass checks the new host and confirms that the page has no detected wall.
+Two agreeing scans are required for URL and form signals.
+
+### Can foxpass fill a password from foxvault?
+
+foxpass delegates a detected password, OTP, or sign-in field to the vault through `fillWall`.
+The vault handles host checks and approval; foxpass returns a status.
 
 ## License
 
-[MIT](LICENSE)
+MIT. See the [MIT license text](https://opensource.org/license/mit).
