@@ -1,6 +1,6 @@
 {
   "name": "foxpass",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Firefox browser-agent authentication handoff with passkey and OTP detection, secret redaction, and foxloop tools.",
   "type": "module",
   "license": "MIT",
